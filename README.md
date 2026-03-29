@@ -36,7 +36,7 @@ This workflow enables trustless settlement while keeping all status transitions 
 └── README.md
 ```
 
-## Dependencies and Setup (Draft)
+## Dependencies and Setup Instructions (Draft)
 ### Prerequisites
 - Node.js (LTS recommended)
 - npm (bundled with Node.js)
