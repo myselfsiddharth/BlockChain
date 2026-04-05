@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../interfaces/IEscrow.sol";
 
 /**
  * @title Escrow
  * @notice Main escrow contract for my decentralized freelancing project.
  * @dev Basic flow:
- *      create escrow -> client deposits -> freelancer submits work ->
+ *      factory initializes -> client deposits -> freelancer submits work ->
  *      client approves (release) or rejects (refund).
- *      This is a draft version made for first submission.
+ *      Use `EscrowFactory.createEscrow` to deploy and initialize; only the factory
+ *      may call `createEscrow` on this contract once.
  */
-contract Escrow is IEscrow {
+contract Escrow is IEscrow, ReentrancyGuard {
+    /// @notice Factory that may call `createEscrow` exactly once.
+    address public immutable factory;
     /// @notice Client wallet address.
     address public client;
 
@@ -29,6 +33,16 @@ contract Escrow is IEscrow {
 
     /// @notice Prevents re-initializing the same escrow contract.
     bool private initialized;
+
+    constructor(address _factory) {
+        require(_factory != address(0), "Invalid factory");
+        factory = _factory;
+    }
+
+    modifier onlyFactory() {
+        require(msg.sender == factory, "Only factory can initialize");
+        _;
+    }
 
     /**
      * @notice Only client can call functions using this modifier.
@@ -62,7 +76,11 @@ contract Escrow is IEscrow {
      * @param _freelancer Freelancer wallet address.
      * @param _amount Agreed escrow amount in wei.
      */
-    function createEscrow(address _client, address _freelancer, uint256 _amount) external override {
+    function createEscrow(address _client, address _freelancer, uint256 _amount)
+        external
+        override
+        onlyFactory
+    {
         require(!initialized, "Escrow already initialized");
         require(_client != address(0), "Invalid client address");
         require(_freelancer != address(0), "Invalid freelancer address");
@@ -119,7 +137,13 @@ contract Escrow is IEscrow {
      * @notice Client approves submitted work.
      * @dev Changes state Completed -> Approved and sends payment to freelancer.
      */
-    function approveWork() external override onlyClient inStatus(EscrowStatus.Completed) {
+    function approveWork()
+        external
+        override
+        onlyClient
+        inStatus(EscrowStatus.Completed)
+        nonReentrant
+    {
         status = EscrowStatus.Approved;
 
         // Transfer escrowed amount to freelancer.
@@ -133,7 +157,13 @@ contract Escrow is IEscrow {
      * @notice Client rejects work and takes refund.
      * @dev Changes state Completed -> Refunded and sends funds back to client.
      */
-    function rejectWork() external override onlyClient inStatus(EscrowStatus.Completed) {
+    function rejectWork()
+        external
+        override
+        onlyClient
+        inStatus(EscrowStatus.Completed)
+        nonReentrant
+    {
         status = EscrowStatus.Refunded;
 
         // Return escrowed amount back to client.
