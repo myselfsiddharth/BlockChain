@@ -35,7 +35,8 @@ const STATUS_LABELS = [
 const defaultFreelancer =
   import.meta.env.VITE_DEFAULT_FREELANCER?.trim?.() || "";
 
-const defaultChainId = Number(import.meta.env.VITE_CHAIN_ID || 80002);
+/** This UI only supports Polygon Amoy. */
+const CHAIN_ID = 80002;
 
 /** Trim, strip wrapping quotes, add 0x if user pasted 40 hex chars only. */
 function normalizeHexAddress(s) {
@@ -130,11 +131,6 @@ function nextStepHint(viewStatus, isClient, isFreelancer, appRole) {
 export default function App() {
   const prefs = loadPrefs();
   const recentInitial = getRecentEscrows();
-
-  const [targetChainId, setTargetChainId] = useState(() => {
-    const id = prefs.targetChainId ?? defaultChainId;
-    return [80002, 137].includes(Number(id)) ? Number(id) : defaultChainId;
-  });
 
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -260,7 +256,6 @@ export default function App() {
 
   useEffect(() => {
     savePrefs({
-      targetChainId,
       escrowAddress,
       createAmountPol,
       workReference,
@@ -269,7 +264,6 @@ export default function App() {
       appRole,
     });
   }, [
-    targetChainId,
     escrowAddress,
     createAmountPol,
     workReference,
@@ -304,16 +298,16 @@ export default function App() {
     clearAuthSession();
     try {
       const prov = await connectWallet();
-      await ensureChain(targetChainId);
+      await ensureChain(CHAIN_ID);
       setProvider(prov);
       await refreshChainAndAccount(prov);
       const sig = await prov.getSigner();
       const addr = await sig.getAddress();
-      const loginMessage = buildLoginMessage(addr, targetChainId);
+      const loginMessage = buildLoginMessage(addr, CHAIN_ID);
       const signature = await sig.signMessage(loginMessage);
       saveAuthSession({
         address: addr,
-        chainId: targetChainId,
+        chainId: CHAIN_ID,
         message: loginMessage,
         signature,
       });
@@ -354,7 +348,7 @@ export default function App() {
     setMessage(null);
     try {
       const prov = await connectWallet();
-      await ensureChain(targetChainId);
+      await ensureChain(CHAIN_ID);
       const sig0 = await prov.getSigner();
       const addr = await sig0.getAddress();
       if (addr.toLowerCase() !== session.address.toLowerCase()) {
@@ -415,19 +409,6 @@ export default function App() {
     savePrefs({ appRole: null });
   };
 
-  const switchNetwork = async () => {
-    setBusy(true);
-    try {
-      await ensureChain(targetChainId);
-      if (provider) await refreshChainAndAccount(provider);
-      showFlash("ok", "Network switched.");
-    } catch (e) {
-      showFlash("err", e?.shortMessage || e?.message || String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const pickRecentEscrow = (value) => {
     setEscrowAddress(value);
     if (provider && isAddress(value)) loadEscrow(value.trim(), { silent: true });
@@ -466,10 +447,10 @@ export default function App() {
     setBusy(true);
     try {
       const net = await signer.provider.getNetwork();
-      if (Number(net.chainId) !== targetChainId) {
+      if (Number(net.chainId) !== CHAIN_ID) {
         showFlash(
           "err",
-          `Wallet is on chain ${net.chainId} but the UI target is ${targetChainId}. Use “Switch network”.`
+          `This app only runs on Polygon Amoy (chain ${CHAIN_ID}). Switch the active network in MetaMask to Polygon Amoy.`
         );
         setBusy(false);
         return;
@@ -479,7 +460,7 @@ export default function App() {
       if (!bytecode || bytecode === "0x") {
         showFlash(
           "err",
-          `No contract at factory ${facCk} on chain ${targetChainId}. Deploy the factory on this network or paste the correct address.`
+          `No contract at factory ${facCk} on chain ${CHAIN_ID}. Deploy the factory on this network or paste the correct address.`
         );
         setBusy(false);
         return;
@@ -495,7 +476,7 @@ export default function App() {
 
       const txOpts = await finalizeGasOverrides(
         signer.provider,
-        targetChainId,
+        CHAIN_ID,
         (hints) =>
           factory.createEscrow.estimateGas(clientCk, freeCk, amountWei, hints),
         { cap: 4_500_000n, fallback: 3_200_000n, floor: 500_000n }
@@ -535,7 +516,7 @@ export default function App() {
       const amt = await esc.amount();
       const txOpts = await finalizeGasOverrides(
         signer.provider,
-        targetChainId,
+        CHAIN_ID,
         (hints) => esc.depositFunds.estimateGas({ value: amt, ...hints }),
         { cap: 450_000n, fallback: 300_000n, floor: 100_000n }
       );
@@ -564,7 +545,7 @@ export default function App() {
       }
       const txOpts = await finalizeGasOverrides(
         signer.provider,
-        targetChainId,
+        CHAIN_ID,
         (hints) => esc.submitWork.estimateGas(wr, hints),
         { cap: 500_000n, fallback: 350_000n, floor: 120_000n }
       );
@@ -587,7 +568,7 @@ export default function App() {
       const esc = new Contract(escrowAddress.trim(), EscrowArtifact.abi, signer);
       const txOpts = await finalizeGasOverrides(
         signer.provider,
-        targetChainId,
+        CHAIN_ID,
         (hints) => esc.approveWork.estimateGas(hints),
         { cap: 400_000n, fallback: 280_000n, floor: 90_000n }
       );
@@ -610,7 +591,7 @@ export default function App() {
       const esc = new Contract(escrowAddress.trim(), EscrowArtifact.abi, signer);
       const txOpts = await finalizeGasOverrides(
         signer.provider,
-        targetChainId,
+        CHAIN_ID,
         (hints) => esc.rejectWork.estimateGas(hints),
         { cap: 400_000n, fallback: 280_000n, floor: 90_000n }
       );
@@ -686,7 +667,7 @@ export default function App() {
     };
   }, [provider, refreshChainAndAccount, authenticated]);
 
-  const wrongChain = chainId != null && chainId !== targetChainId;
+  const wrongChain = chainId != null && chainId !== CHAIN_ID;
 
   const isClient = useMemo(() => {
     return sameAddress(account, viewClient);
@@ -735,7 +716,7 @@ export default function App() {
     actionButtonExplanations.push("Connect your wallet first.");
   } else if (wrongChain) {
     actionButtonExplanations.push(
-      `Use “Switch network” so MetaMask matches chain ${targetChainId}.`
+      `Use Polygon Amoy (chain ${CHAIN_ID}) in MetaMask — switch the active network in your wallet.`
     );
   } else if (viewStatus == null) {
     actionButtonExplanations.push(
@@ -793,7 +774,7 @@ export default function App() {
   if (!account) createEscrowBlockers.push("Connect your wallet.");
   if (wrongChain)
     createEscrowBlockers.push(
-      `Switch MetaMask to chain ID ${targetChainId} (tap “Switch network”).`
+      `Switch MetaMask to Polygon Amoy (chain ${CHAIN_ID}).`
     );
   if (!factoryConfigured) {
     createEscrowBlockers.push(
@@ -808,17 +789,25 @@ export default function App() {
 
   return (
     <div className="app">
-      <h1>Polygon Escrow</h1>
-      <p className="subtitle">
-        Freelance payment flow on Polygon — POL in escrow until the client
-        approves work or requests a refund.
-      </p>
+      <header className="app-header">
+        <div className="app-header__top">
+          <div className="app-logo" aria-hidden="true" />
+          <span className="app-pill">Polygon Amoy · testnet</span>
+        </div>
+        <h1>Escrow</h1>
+        <p className="subtitle">
+          Hold POL in trust on-chain until work is approved or refunded — built
+          for clients and freelancers, with clear steps at every stage.
+        </p>
+      </header>
 
+      <main className="app-main">
       {message && (
         <div
           className={`flash flash-${
             messageKind === "err" ? "err" : messageKind === "warn" ? "warn" : "ok"
           }`}
+          role={messageKind === "err" ? "alert" : "status"}
         >
           {message}
         </div>
@@ -829,24 +818,13 @@ export default function App() {
           <div className="auth-panel-inner">
             <h2 className="auth-title">Sign in</h2>
             <p className="auth-lead">
-              We use your crypto wallet — no username or password on our servers. After you
+              We use your crypto wallet, no username or password on our servers. After you
               connect, you’ll be asked to sign a short message (standard for dapps) to prove
               you control this address.
             </p>
-            <div className="row auth-row">
-              <div className="field">
-                <label htmlFor="auth-chain">Network for this session</label>
-                <select
-                  id="auth-chain"
-                  value={targetChainId}
-                  onChange={(e) => setTargetChainId(Number(e.target.value))}
-                  disabled={busy}
-                >
-                  <option value={80002}>Polygon Amoy (80002)</option>
-                  <option value={137}>Polygon PoS (137)</option>
-                </select>
-              </div>
-            </div>
+            <p className="auth-network-note">
+              Network: <strong>Polygon Amoy</strong> (chain {CHAIN_ID})
+            </p>
             <div className="auth-actions">
               <button
                 type="button"
@@ -883,32 +861,38 @@ export default function App() {
 
       {authenticated && !appRole && (
         <div className="role-panel">
-          <h2 className="role-title">Who are you for this visit?</h2>
+          <h2 className="role-title">Who are you?</h2>
           <p className="role-lead">
-            We only show the actions that apply to that side of the deal. You can change this
-            later without signing out.
+            We’ll only show buttons that match your role. You can switch anytime with{" "}
+            <strong>Change role</strong> — no need to sign out.
           </p>
           <div className="role-cards">
             <button
               type="button"
-              className="role-card"
+              className="role-card role-card--client"
               onClick={() => chooseRole("client")}
               disabled={busy}
             >
-              <span className="role-card-label">Client</span>
+              <span className="role-card-icon" aria-hidden="true">
+                💼
+              </span>
+              <span className="role-card-label">I’m the client</span>
               <span className="role-card-desc">
-                Create escrows, deposit POL, approve delivery or request a refund.
+                Open an escrow, deposit POL, then approve payout or request a refund.
               </span>
             </button>
             <button
               type="button"
-              className="role-card"
+              className="role-card role-card--freelancer"
               onClick={() => chooseRole("freelancer")}
               disabled={busy}
             >
-              <span className="role-card-label">Freelancer</span>
+              <span className="role-card-icon" aria-hidden="true">
+                🛠️
+              </span>
+              <span className="role-card-label">I’m the freelancer</span>
               <span className="role-card-desc">
-                Join with the escrow address the client gives you and submit your work proof.
+                Paste the escrow address from your client and submit your deliverable proof.
               </span>
             </button>
           </div>
@@ -918,7 +902,7 @@ export default function App() {
       {authenticated && appRole && (
         <>
           <div className="next-step" role="status">
-            <strong>Next step</strong>
+            <strong>What to do next</strong>
             <p className="next-step-text">{hint}</p>
           </div>
 
@@ -938,14 +922,6 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn-secondary btn-small"
-                onClick={switchNetwork}
-                disabled={busy}
-              >
-                Switch network
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-small"
                 onClick={disconnect}
                 disabled={busy}
               >
@@ -957,13 +933,15 @@ export default function App() {
               {chainId != null && (
                 <>
                   {" "}
-                  · chain {chainId}
+                  ·{" "}
                   {wrongChain ? (
                     <span className="session-warn">
-                      {" "}
-                      — use Switch network to match {targetChainId}
+                      wrong network ({chainId}) — switch to Polygon Amoy ({CHAIN_ID}) in
+                      MetaMask
                     </span>
-                  ) : null}
+                  ) : (
+                    <>Polygon Amoy ({chainId})</>
+                  )}
                 </>
               )}
             </p>
@@ -1128,7 +1106,7 @@ export default function App() {
         <div className="row">
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-outline"
             disabled={busy || !escrowAddress.trim()}
             onClick={() => loadEscrow()}
           >
@@ -1136,39 +1114,61 @@ export default function App() {
           </button>
         </div>
         {viewStatus != null ? (
-          <>
-            <p className="status-line">
-              Status: <strong>{STATUS_LABELS[viewStatus] ?? viewStatus}</strong>
-            </p>
-            <p className="status-line">Client: {viewClient}</p>
-            <p className="status-line">Freelancer: {viewFreelancer}</p>
-            <p className="status-line">Amount (POL): {viewAmount}</p>
-            <p className="status-line">On-chain work ref: {viewWorkRef || "—"}</p>
-            {account && (
-              <p className="status-line">
-                Connected wallet role:{" "}
-                <strong>
-                  {walletRole === "client"
-                    ? "Client (can deposit / approve / reject when status allows)"
-                    : walletRole === "freelancer"
-                      ? "Freelancer (can submit work when funded)"
-                      : walletRole === "neither"
-                        ? "Neither — switch MetaMask account"
-                        : "—"}
-                </strong>
-              </p>
-            )}
-            {appRole === "freelancer" &&
-              viewStatus === 1 &&
-              account &&
-              viewFreelancer && (
-              <p className="status-line hint-match">
-                Funded step: your wallet {isFreelancer ? "matches" : "does not match"}{" "}
-                on-chain freelancer{" "}
-                <code className="addr-chip">{viewFreelancer}</code>.
-              </p>
-            )}
-          </>
+          <div className="status-card">
+            <div className="status-grid">
+              <div className="status-line">
+                <span className="status-k">Status</span>
+                <span className="status-v">
+                  <strong>{STATUS_LABELS[viewStatus] ?? viewStatus}</strong>
+                </span>
+              </div>
+              <div className="status-line">
+                <span className="status-k">Client</span>
+                <span className="status-v">{viewClient}</span>
+              </div>
+              <div className="status-line">
+                <span className="status-k">Freelancer</span>
+                <span className="status-v">{viewFreelancer}</span>
+              </div>
+              <div className="status-line">
+                <span className="status-k">Amount</span>
+                <span className="status-v">{viewAmount} POL</span>
+              </div>
+              <div className="status-line">
+                <span className="status-k">Work reference</span>
+                <span className="status-v">{viewWorkRef || "—"}</span>
+              </div>
+              {account && (
+                <div className="status-line status-line--wide">
+                  <span className="status-k">Your wallet on this escrow</span>
+                  <span className="status-v">
+                    <strong>
+                      {walletRole === "client"
+                        ? "Client — you can deposit, approve, or reject when the contract allows"
+                        : walletRole === "freelancer"
+                          ? "Freelancer — you can submit work when funded"
+                          : walletRole === "neither"
+                            ? "Neither party — switch MetaMask to the client or freelancer address"
+                            : "—"}
+                    </strong>
+                  </span>
+                </div>
+              )}
+              {appRole === "freelancer" &&
+                viewStatus === 1 &&
+                account &&
+                viewFreelancer && (
+                  <p className="status-line status-line--wide hint-match">
+                    <span className="status-k">Funded check</span>
+                    <span className="status-v">
+                      Your wallet {isFreelancer ? "matches" : "does not match"} the
+                      on-chain freelancer{" "}
+                      <code className="addr-chip">{viewFreelancer}</code>.
+                    </span>
+                  </p>
+                )}
+            </div>
+          </div>
         ) : (
           escrowAddress.trim() &&
           provider && (
@@ -1255,6 +1255,7 @@ export default function App() {
       </div>
         </>
       )}
+      </main>
     </div>
   );
 }

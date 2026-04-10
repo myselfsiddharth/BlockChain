@@ -1,4 +1,4 @@
-/** Polygon networks supported by the UI */
+/** Polygon Amoy — the only network this UI supports. */
 
 export const CHAIN_META = {
   80002: {
@@ -7,13 +7,6 @@ export const CHAIN_META = {
     nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
     rpcUrls: ["https://rpc-amoy.polygon.technology"],
     blockExplorerUrls: ["https://amoy.polygonscan.com"],
-  },
-  137: {
-    chainIdHex: "0x89",
-    chainName: "Polygon PoS",
-    nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
-    rpcUrls: ["https://polygon-rpc.com"],
-    blockExplorerUrls: ["https://polygonscan.com"],
   },
 };
 
