@@ -1,10 +1,11 @@
 # Decentralized Smart Contract-Based Escrow System
 
-## Project Description
-This project implements a decentralized escrow workflow for freelancing payments.
-It replaces centralized intermediary trust with transparent, on-chain state transitions.
+## Project Description:
+This project is an early-stage draft of a decentralized escrow system for freelancing transactions.  
+It reduces trust dependency between a client and a freelancer by using a smart contract to hold funds until work is reviewed.
 
-The **factory** deploys one `Escrow` contract per job and initializes it in the same transaction.
+Traditional freelance workflows often rely on centralized intermediaries to prevent payment fraud or non-delivery of work.  
+This system replaces that intermediary logic with transparent and on-chain rules so both parties can verify the transaction state at any time.
 
 On-chain flow:
 1. Call `EscrowFactory.createEscrow(client, freelancer, amount)` → new `Escrow` at a fresh address.
