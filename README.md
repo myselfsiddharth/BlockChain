@@ -1,11 +1,11 @@
 # Decentralized Smart Contract-Based Escrow System
 
-## Project Description
+## Project Description:
 This project is an early-stage draft of a decentralized escrow system for freelancing transactions.  
 It reduces trust dependency between a client and a freelancer by using a smart contract to hold funds until work is reviewed.
 
 Traditional freelance workflows often rely on centralized intermediaries to prevent payment fraud or non-delivery of work.  
-This system replaces that intermediary logic with transparent, on-chain rules so both parties can verify the transaction state at any time.
+This system replaces that intermediary logic with transparent and on-chain rules so both parties can verify the transaction state at any time.
 
 ## System Overview
 The escrow process is managed by an Ethereum-compatible smart contract:
