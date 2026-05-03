@@ -1,0 +1,40 @@
+{
+  "name": "blockchain",
+  "version": "1.0.0",
+  "description": "This project is an early-stage draft of a decentralized escrow system for freelancing transactions.  \r It reduces trust dependency between a client and a freelancer by using a smart contract to hold funds until work is reviewed.",
+  "main": "index.js",
+  "scripts": {
+    "clean": "npx hardhat clean",
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "node": "npx hardhat node",
+    "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
+    "deploy:polygon": "npx hardhat run scripts/deploy.js --network polygon",
+    "deploy:amoy": "npx hardhat run scripts/deploy.js --network amoy",
+    "demo:amoy": "npx hardhat run scripts/demo-flow.js --network amoy",
+    "dev:ui": "npm --prefix frontend run dev",
+    "build:ui": "npm --prefix frontend run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/myselfsiddharth/BlockChain.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/myselfsiddharth/BlockChain/issues"
+  },
+  "homepage": "https://github.com/myselfsiddharth/BlockChain#readme",
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomiclabs/hardhat-waffle": "^2.0.6",
+    "@openzeppelin/contracts": "^5.0.2",
+    "chai": "^4.5.0",
+    "dotenv": "^17.3.1",
+    "ethereum-waffle": "^4.0.10",
+    "ethers": "^5.8.0",
+    "hardhat": "^2.22.2"
+  }
+}

@@ -7,82 +7,204 @@ It reduces trust dependency between a client and a freelancer by using a smart c
 Traditional freelance workflows often rely on centralized intermediaries to prevent payment fraud or non-delivery of work.  
 This system replaces that intermediary logic with transparent and on-chain rules so both parties can verify the transaction state at any time.
 
-## System Overview
-The escrow process is managed by an Ethereum-compatible smart contract:
-
-1. A client and freelancer are assigned to an escrow agreement.
-2. The client deposits the agreed payment into the contract.
-3. The freelancer submits work (represented by a proof string such as an IPFS CID or hash).
-4. The client either:
-   - approves the work, releasing funds to the freelancer, or
-   - rejects the work, triggering a refund to the client.
-
-This workflow enables trustless settlement while keeping all status transitions visible on-chain.
+On-chain flow:
+1. Call `EscrowFactory.createEscrow(client, freelancer, amount)` → new `Escrow` at a fresh address.
+2. Client calls `depositFunds()` with exact `amount` in the chain’s **native token** (on **Polygon PoS**, that is **POL** for gas and for this escrow’s payable amount).
+3. Freelancer calls `submitWork(workReference)` (e.g. IPFS CID).
+4. Client calls `approveWork()` to pay the freelancer **or** `rejectWork()` to refund.
 
 ## Tech Stack
-- **Blockchain**: Ethereum-compatible chain (targeting Polygon as Layer-2)
-- **Smart Contracts**: Solidity (`^0.8.20`)
-- **Development Tooling**: Hardhat 
-- **Wallet**: MetaMask
-- **Frontend (future extension)**: React / Flutter placeholder
+- **Blockchain**: **[Polygon PoS](https://polygon.technology/polygon-pos)** (this project is configured for Polygon mainnet and **Polygon Amoy** testnet in `hardhat.config.js`)
+- **Smart Contracts**: Solidity `^0.8.20`, OpenZeppelin `ReentrancyGuard`
+- **Dev Tooling**: Hardhat + Ethers + Chai
+- **Wallet**: MetaMask (or similar) on **Polygon Amoy** or **Polygon PoS** when deploying/interacting outside localhost
+- **Web UI**: Vite + React + ethers v6 (`frontend/`)
+
+## Web UI (MetaMask)
+
+1. Deploy `EscrowFactory` on Polygon Amoy (or PoS) and copy its address.
+2. From the repo root:
+   ```bash
+   cd frontend
+   cp .env.example .env
+   ```
+   Set `VITE_FACTORY_ADDRESS` (and optional `VITE_CHAIN_ID`, default `80002`).
+   Optionally set `VITE_DEFAULT_FREELANCER` to always prefill the freelancer field when you demo with the same second wallet.
+   The app also **remembers** factory, escrow, amounts, and work reference in **browser localStorage** so fields stay filled between visits.
+3. Install and run the dev server:
+   ```bash
+   npm install
+   npm run dev
+   ```
+   Or from the repo root: `npm run dev:ui`
+4. Open the printed URL (usually `http://localhost:5173`). Connect MetaMask, **Switch network** to match the UI target (Amoy `80002` or PoS `137`).
+5. **Create escrow** (any wallet can call the factory). Then switch accounts:
+   - **Client** → **Deposit** → **Approve** or **Reject**
+   - **Freelancer** → **Submit work**
+
+ABIs are copied from `artifacts/` into `frontend/src/abis/`. After you change Solidity, run `npm run compile` at the repo root and **re-copy** the JSON files, or copy manually:
+
+```bash
+copy artifacts\contracts\EscrowFactory.sol\EscrowFactory.json frontend\src\abis\
+copy artifacts\contracts\Escrow.sol\Escrow.json frontend\src\abis\
+```
+
+(Build for static hosting: `npm run build:ui` from repo root, then serve `frontend/dist`.)
 
 ## Repository Structure
 ```text
 .
-├── contracts
-│   └── Escrow.sol
-├── interfaces
+├── contracts/
+│   ├── Escrow.sol
+│   └── EscrowFactory.sol
+├── frontend/
+│   ├── src/
+│   └── package.json
+├── interfaces/
 │   └── IEscrow.sol
+├── scripts/
+│   └── deploy.js
+├── test/
+│   └── Escrow.test.js
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── hardhat.config.js
+├── .env.example
 └── README.md
 ```
 
-## Dependencies and Setup Instructions (Draft)
-### Prerequisites
-- Node.js (LTS recommended)
-- npm (bundled with Node.js)
-- MetaMask browser extension
-- Hardhat
+## Contract Workflow
+- **Deploy**: `scripts/deploy.js` deploys **`EscrowFactory`** (not a single `Escrow`).
+- **Indexing**: `EscrowFactory` emits `EscrowDeployed(escrow, client, freelancer, amount, escrowId)` for each new escrow.
 
-### Basic Setup Steps
-1. Clone this repository.
-2. Install dependencies (when `package.json` is added):
-   ```bash
-   npm install
-   ```
-3. Initialize Hardhat in the project (if not already initialized):
-   ```bash
-   npx hardhat --init
-   ```
-4. Add network and wallet settings in `hardhat.config.*` and `.env` (for testnet deployment).
+Status progression (per `Escrow` instance):
+- `Created` -> after factory calls `createEscrow` on that instance
+- `Funded` -> after `depositFunds`
+- `Completed` -> after `submitWork`
+- `Approved` -> after `approveWork` and payment release
+- `Refunded` -> after `rejectWork` and refund
 
-> Based on current Hardhat docs, typical local workflow uses `npx hardhat node` and network-specific deployment commands.
+Role and access rules:
+- Only **`EscrowFactory`** (when deploying a new escrow) may call `Escrow.createEscrow` — random accounts cannot hijack initialization.
+- Only client can `depositFunds`, `approveWork`, `rejectWork`
+- Only freelancer can `submitWork`
+- `approveWork` and `rejectWork` use OpenZeppelin **`nonReentrant`** for safe external transfers.
 
-## How to Deploy and Use (Draft)
-### Deploy (Local)
-1. Start a local Hardhat node:
-   ```bash
-   npx hardhat node
-   ```
-2. Deploy the escrow contract using your deployment script/module.
-3. Copy the deployed contract address for interactions.
+## Prerequisites
+- Node.js (LTS)
+- npm
+- MetaMask (or another EVM wallet) with the **Polygon** network added — see [Add Polygon to MetaMask](https://polygon.technology/blog/how-to-add-polygon-to-metamask)
 
-### Deploy (Testnet / Polygon-Compatible)
-1. Configure RPC URL and deployer private key in environment variables.
-2. Set target network in Hardhat config (e.g., Polygon Amoy or another compatible testnet).
-3. Run deployment command for that network.
+## Setup
+```bash
+npm install
+```
 
-### Simulated Usage Flow
-1. **createEscrow**: define client, freelancer, and expected amount.
-2. **depositFunds** (client): fund escrow with exact agreed value.
-3. **submitWork** (freelancer): submit completion proof/reference.
-4. **approveWork** (client): release funds to freelancer.
-5. **rejectWork** (client): refund escrowed funds to client.
+Compile contracts:
+```bash
+npm run compile
+```
 
-## Current Status
-This is a first submission draft focused on:
-- contract structure,
-- workflow-aligned function signatures,
-- access control checks,
-- events and documentation comments.
+Run tests:
+```bash
+npm test
+```
 
-Production features such as milestone escrow, arbitration, deadlines, signature-based approvals, and frontend integration are planned for later iterations.
+## Local Deployment
+Start local Hardhat node (terminal 1):
+```bash
+npm run node
+```
+
+Deploy **EscrowFactory** on localhost (terminal 2):
+```bash
+npm run deploy:local
+```
+
+You will log a factory address. Use it in Hardhat console or a small script to call `createEscrow` and obtain each new escrow address (see `EscrowDeployed` in the transaction receipt).
+
+## Polygon deployment
+
+All live networks below use the same `PRIVATE_KEY` in `.env` for the deployer account. Fund that account with **POL** (mainnet) or **testnet POL** (Amoy) for gas.
+
+### Polygon Amoy (testnet — recommended for class)
+
+- **Chain ID:** `80002`
+- Copy `.env.example` to `.env` and set:
+  - `POLYGON_AMOY_RPC_URL` (or legacy `AMOY_RPC_URL`)
+  - `PRIVATE_KEY`
+
+```bash
+npm run deploy:amoy
+```
+
+Get test POL from an [Amoy faucet](https://faucet.polygon.technology/) (or search “Polygon Amoy faucet”).
+
+### Polygon PoS (mainnet)
+
+- **Chain ID:** `137`
+- Set `POLYGON_RPC_URL` to a reliable RPC endpoint and fund the deployer with **POL**.
+
+```bash
+npm run deploy:polygon
+```
+
+Use only if you intend to spend real POL; for coursework, prefer **Amoy** or **localhost**.
+
+## Simulated Usage Flow
+After the factory is deployed:
+1. `EscrowFactory.createEscrow(client, freelancer, amountWei)` — note the new escrow address from `EscrowDeployed`.
+2. On **that** escrow: `depositFunds()` from client with exact `amount`.
+3. `submitWork(workReference)` from freelancer.
+4. `approveWork()` from client **or** `rejectWork()` from client.
+
+### Class demo (local)
+1. `npm run node` — keep running.
+2. `npm run deploy:local` — copy the factory address.
+3. Use MetaMask + Remix, or Hardhat console (`npx hardhat console --network localhost`), to call `createEscrow` then the escrow steps above.
+
+### Class demo (Polygon Amoy)
+
+1. Add **Polygon Amoy** to MetaMask (chain ID **80002** — use [chainlist.org](https://chainlist.org) or Polygon’s docs if needed).
+2. Fund your wallet with test POL from a faucet.
+3. Put `POLYGON_AMOY_RPC_URL` and `PRIVATE_KEY` in `.env`, then `npm run deploy:amoy` and use the factory address in Remix or a small UI on chain **80002**.
+
+### Scripted class demo (Polygon Amoy)
+
+If you also set **client and freelancer wallets** (separate private keys) in `.env`, you can run the full workflow end-to-end:
+
+```bash
+npm run demo:amoy
+```
+
+Required `.env` variables for this script:
+- `FACTORY_ADDRESS`
+- `CLIENT_PRIVATE_KEY`
+- `FREELANCER_PRIVATE_KEY`
+- `AMOUNT_ETH`
+- `WORK_REFERENCE`
+- `ACTION` (`approve` or `reject`)
+
+## CI
+GitHub Actions runs `npm ci`, compile, and tests on push/PR (see `.github/workflows/ci.yml`).
+
+## Test Coverage
+`test/Escrow.test.js` includes:
+- factory deploy + `EscrowDeployed` event and `escrowCount`
+- happy path (factory -> fund -> submit -> approve)
+- refund path (factory -> fund -> submit -> reject)
+- `createEscrow` callable only by the escrow’s factory
+- role and state restriction tests
+- input validation tests (zero addresses, zero amount, bad deposit, empty work reference)
+- event emission checks for all workflow events
+
+## Current Scope and Limitations
+Current version is single-escrow-per-contract and focuses on core workflow integrity.
+
+Not included yet:
+- milestone-based escrow
+- deadlines and auto-expiry
+- arbitration/dispute resolution
+- signature-based approvals
+- production frontend integration
